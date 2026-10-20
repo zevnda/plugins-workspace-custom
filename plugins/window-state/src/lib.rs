@@ -225,10 +225,23 @@ impl<R: Runtime> WindowExt for Window<R> {
             }
 
             if flags.contains(StateFlags::SIZE) {
-                self.set_size(PhysicalSize {
-                    width: state.width,
-                    height: state.height,
-                })?;
+                let size = PhysicalSize::new(state.width, state.height);
+                self.set_size(size)?;
+
+                // On Windows, tao sizes an undecorated window by adding its current frame offset
+                // (window rect minus client rect) to the requested inner size. A freshly created
+                // window hasn't had its undecorated frame recalculated yet, so that offset still
+                // includes the hidden title bar and the window comes out a title bar too tall -
+                // growing on every save/restore cycle. The first `set_size` triggers the frame
+                // recalculation, so a second one computes the offset correctly.
+                //
+                // TODO: remove once a tao release includes tauri-apps/tao#1361 (the root-cause fix
+                // for tauri-apps/tao#1359, merged after tao 0.37.1). With it, the first `set_size`
+                // already lands on `size` and this branch is skipped anyway.
+                #[cfg(windows)]
+                if self.inner_size()? != size {
+                    self.set_size(size)?;
+                }
             }
 
             if flags.contains(StateFlags::MAXIMIZED) && state.maximized {
